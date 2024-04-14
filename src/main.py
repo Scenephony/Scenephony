@@ -1,12 +1,80 @@
 import os
 import torch
-import torchvision
+import torch.utils
 import torchaudio
+from torchvision.io import read_video
 from tqdm import tqdm
 from typing import Optional
 
 from model import ScenephonyModel
 
+
+def train(
+    data_dir: str,
+    output_dir: str,
+    seed: int = 42,
+    batch_size: int = 4,
+    num_epochs: int = 10,
+    lr: float = 1e-3,
+    log_freq: int = 100,
+    checkpoint_path: Optional[str] = None
+):
+    """Train the Scenephony model.
+
+    Args:
+        data_dir: Path to the training dataset.
+        output_dir: Path to save the trained model.
+        seed: Random seed.
+        batch_size: Batch size.
+        num_epochs: Number of epochs.
+        lr: Learning rate.
+        log_freq: Logging frequency.
+        checkpoint_path: Path to optionally load a checkpoint before starting training.
+    """
+    # Initial setup
+    set_seed(seed)
+    os.makedirs(output_dir, exist_ok=True)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # Setup model, optimizer and loss function
+    model = ScenephonyModel()
+    if checkpoint_path is not None:
+        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    model.to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+    criterion = torch.nn.MSELoss()
+
+    # Load videos and target audios from data_dir files, then create dataloader
+    videos, audios = [], []
+    for fn in os.listdir(data_dir):
+        # Process video and audio at the same iter, skip audios iters
+        if fn.endswith('.wav'):
+            continue
+
+        root_fn = fn.split('.')[0]
+        video_path = os.path.join(data_dir, fn + ".mp4")
+        audio_path = os.path.join(data_dir, fn + ".wav")
+        videos.append(read_video(video_path, output_format="TCHW")[0].to(device))
+        audios.append(torchaudio.load(audio_path)[0].to(device))
+
+    dataset = torch.utils.data.TensorDataset(torch.stack(videos), torch.stack(audios))
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
+
+    # Start training
+    for epoch in range(num_epochs):
+        for i, (video, audio) in tqdm(enumerate(dataloader)):
+            model.train()
+            optimizer.zero_grad()
+            pred_audio = model(video)
+            loss = criterion(pred_audio, audio)
+            loss.backward()
+            optimizer.step()
+
+            if i % log_freq == 0:
+                print(f"Epoch {epoch}, Iter {i}, Loss: {loss.item()}")
+
+        # Save model checkpoint
+        torch.save(model.state_dict(), os.path.join(output_dir, f"model_{epoch}.pth"))
 
 @torch.no_grad()
 def test(
@@ -37,7 +105,7 @@ def test(
     # Load data, inference and save audio files
     for vid_fn in tqdm(os.listdir(data_dir)):
         vid_path = os.path.join(data_dir, vid_fn)
-        video = torchvision.io.read_video(vid_path, output_format="TCHW")[0].to(device)
+        video = read_video(vid_path, output_format="TCHW")[0].to(device)
         audio = model(video)
         audio_path = os.path.join(output_dir, vid_fn.replace('.mp4', '.wav'))
         torchaudio.save(audio_path, audio.cpu(), model.audio_sample_rate)
