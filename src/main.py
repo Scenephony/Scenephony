@@ -51,12 +51,13 @@ def train(
         if fn.endswith('.wav'):
             continue
 
-        root_fn = fn.split('.')[0]
-        video_path = os.path.join(data_dir, fn + ".mp4")
-        audio_path = os.path.join(data_dir, fn + ".wav")
+        fn_no_ext = fn.split('.')[0]
+        video_path = os.path.join(data_dir, fn_no_ext + ".mp4")
+        audio_path = os.path.join(data_dir, fn_no_ext + ".wav")
         videos.append(read_video(video_path, output_format="TCHW")[0].to(device))
         audios.append(torchaudio.load(audio_path)[0].to(device))
 
+    # TODO: Handle videos with different num frames (T) and audio length
     dataset = torch.utils.data.TensorDataset(torch.stack(videos), torch.stack(audios))
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
@@ -105,8 +106,8 @@ def test(
     # Load data, inference and save audio files
     for vid_fn in tqdm(os.listdir(data_dir)):
         vid_path = os.path.join(data_dir, vid_fn)
-        video = read_video(vid_path, output_format="TCHW")[0].to(device)
-        audio = model(video)
+        video = read_video(vid_path, output_format="TCHW")[0].to(device)    # shape: (T, C, H, W)
+        audio = model(video.unsqueeze(0))   # inp_shape: (1, T, C, H, W)
         audio_path = os.path.join(output_dir, vid_fn.replace('.mp4', '.wav'))
         torchaudio.save(audio_path, audio.cpu(), model.audio_sample_rate)
 
