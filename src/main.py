@@ -2,11 +2,33 @@ import os
 import torch
 import torch.utils
 import torchaudio
+from math import ceil
 from torchvision.io import read_video
 from tqdm import tqdm
 from typing import Optional
 
-from model import ScenephonyModel
+from model import ScenephonyModel, ScenephonyModelConfig
+
+
+def preproc_vid(video: torch.Tensor, sample_frames: int, new_H: int, new_W: int) -> torch.Tensor:
+    """Sample frames from the video, one every ceil(T / sample_frames) frames. In addition, resize
+    each frame to have frame size new_h x new_w.
+    
+    Args:
+        video: Input video frames of shape (T, C, H, W).
+        sample_frames: Number of frames to sample.
+        new_H: New height of the frame.
+        new_W: New width of the frame.
+    
+    Returns:
+        Sampled video frames of shape (sample_frames, C, new_H, new_W).
+    """
+    T = video.size(0)
+    step = ceil(T / sample_frames)
+    res = torch.nn.functional.interpolate(video[::step], (new_H, new_W))
+    
+    assert res.size(0) == sample_frames
+    return res
 
 
 def train(
@@ -37,7 +59,8 @@ def train(
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Setup model, optimizer and loss function
-    model = ScenephonyModel()
+    config = ScenephonyModelConfig()
+    model = ScenephonyModel(config)
     if checkpoint_path is not None:
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.to(device)
@@ -47,17 +70,21 @@ def train(
     # Load videos and target audios from data_dir files, then create dataloader
     videos, audios = [], []
     for fn in os.listdir(data_dir):
-        # Process video and audio at the same iter, skip audios iters
-        if fn.endswith('.wav'):
-            continue
-
         fn_no_ext = fn.split('.')[0]
         video_path = os.path.join(data_dir, fn_no_ext + ".mp4")
-        audio_path = os.path.join(data_dir, fn_no_ext + ".wav")
-        videos.append(read_video(video_path, output_format="TCHW")[0].to(device))
-        audios.append(torchaudio.load(audio_path)[0].to(device))
+        # audio_path = os.path.join(data_dir, fn_no_ext + ".wav")
+        video = read_video(
+            video_path, 
+            start_pts=10, end_pts=20, pts_unit="sec", 
+            output_format="TCHW"
+        )[0].to(device)
 
-    # TODO: Handle videos with different num frames (T) and audio length
+        # Resize video to have frame size of 224x224
+        video = preproc_vid(
+            video, config.sample_frames, config.hidden_frame_h, config.hidden_frame_w
+        )
+        videos.append(video)
+
     dataset = torch.utils.data.TensorDataset(torch.stack(videos), torch.stack(audios))
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
@@ -98,7 +125,8 @@ def test(
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Setup/load model
-    model = ScenephonyModel()
+    config = ScenephonyModelConfig()
+    model = ScenephonyModel(config)
     if checkpoint_path is not None:
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.to(device)
@@ -106,7 +134,16 @@ def test(
     # Load data, inference and save audio files
     for vid_fn in tqdm(os.listdir(data_dir)):
         vid_path = os.path.join(data_dir, vid_fn)
-        video = read_video(vid_path, output_format="TCHW")[0].to(device)    # shape: (T, C, H, W)
+        video = read_video(
+            vid_path, 
+            start_pts=10, end_pts=20, pts_unit="sec", 
+            output_format="TCHW"
+        )[0].to(device)    # shape: (T, C, H, W)
+        video = preproc_vid(
+            video, config.sample_frames, config.hidden_frame_h, config.hidden_frame_w
+        )
+        print(video.shape)
+
         audio = model(video.unsqueeze(0))   # inp_shape: (1, T, C, H, W)
         audio_path = os.path.join(output_dir, vid_fn.replace('.mp4', '.wav'))
         torchaudio.save(audio_path, audio.cpu(), model.audio_sample_rate)
