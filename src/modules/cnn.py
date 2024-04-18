@@ -1,60 +1,53 @@
-import torch
+from dataclasses import dataclass
+from torch import nn, Tensor
 import torchvision.models as models
-import torchvision.transforms as transforms
-from PIL import Image
-from torch.utils.data import DataLoader, Dataset
-from pathlib import Path
+import torch
 
-# Constants
-W = 256  # Width of each frame
-H = 256  # Height of each frame
-
-# Load the pretrained ResNet-50 model
-model = models.resnet50(pretrained=True)
-
-# Keep only the feature extraction part
-model = torch.nn.Sequential(*list(model.children())[:-1])
-
-model.eval()
-
-class VideoFrameDataset(Dataset):
-    def __init__(self, folder_path):
-        self.folder_path = Path(folder_path)
-        self.videos = [d for d in self.folder_path.iterdir() if d.is_dir()]
-        self.transform = transforms.Compose([
-            transforms.Resize((H, W)),
-            transforms.CenterCrop((H, W)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
-
-    def __len__(self):
-        return len(self.videos)
-
-    def __getitem__(self, index):
-        video_path = self.videos[index]
-        frames = list(video_path.glob('*.jpg'))
-        images = [self.transform(Image.open(frame).convert('RGB')) for frame in frames]
-        return torch.stack(images)
-
-def extract_features(folder_path, batch_size=1):
-    dataset = VideoFrameDataset(folder_path)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4)
-
-    video_features = []
+@dataclass
+class CNNFeatureExtractorConfig:
+    """Configuration class for CNNFeatureExtractor.
     
-    with torch.no_grad():
-        for video_frames in dataloader:
-            batch_features = []
-            for frames in video_frames:
-                features = model(frames)
-                features = features.view(features.size(0), -1)  # Flatten the features
-                batch_features.append(features)
-            video_features.append(torch.stack(batch_features))
+    Attributes:
+        pretrained: Whether to use the pretrained model weights.
+        num_classes: Number of features in the output layer.
+    """
+    pretrained: bool = True
+    num_classes: int
 
-    return video_features
+class CNNFeatureExtractor(nn.Module):
+    """Model to extract features from a sequence of images using ResNet50 and process through FC layers."""
 
-folder_path = 'path_to_key_frames_folder'
-features_per_video = extract_features(folder_path)
-for video_features in features_per_video:
-    print(video_features.shape)  # Each shape will be [N, Feature_length], wh
+    def __init__(self, config: CNNFeatureExtractorConfig):
+        super(CNNFeatureExtractor, self).__init__()
+        # Load the pretrained ResNet50 model
+        self.resnet50 = models.resnet50(pretrained=config.pretrained)
+        # Replace the output layer with an Identity to use the features directly
+        num_features = self.resnet50.fc.in_features
+        self.resnet50.fc = nn.Identity()  # Bypass the final FC layer
+
+        # Additional layers to process the features
+        self.fc1 = nn.Linear(num_features, config.num_classes * 2)
+        self.fc2 = nn.Linear(config.num_classes * 2, config.num_classes)
+        self.relu = nn.ReLU()
+
+    def forward(self, x: Tensor) -> Tensor:
+        """Extracts features from a sequence of input images and processes through FC layers.
+        
+        Args:
+            x: Input tensor of shape (batch_size, seq_len, 3, H, W)
+        
+        Returns:
+            Output tensor of shape (batch_size, num_classes).
+        """
+        batch_size, seq_len, c, h, w = x.shape
+        x = x.view(-1, c, h, w)
+        features = self.resnet50(x)
+
+        features = features.view(batch_size, seq_len, -1)
+        features = features.mean(dim=1)
+
+        # Fully connected layers to refine the features
+        features = self.fc1(features)
+        features = self.relu(features)
+        output = self.fc2(features)
+        return output
