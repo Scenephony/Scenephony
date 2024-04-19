@@ -4,6 +4,7 @@ from modules.img_seq_lstm import ImgSeqLSTM, ImgSeqLSTMConfig
 from torch import nn, Tensor
 from dataclasses import dataclass
 
+
 # Configuration class
 @dataclass
 class ScenephonyModelConfig:
@@ -23,10 +24,11 @@ class ScenephonyModelConfig:
     lstm_input_size: int = 128
     lstm_hidden_size: int = 64
     lstm_num_layers: int = 2
-    lstm_output_size: int = 10
+    lstm_output_size: int = 202
     sample_frames: int = 15
     hidden_frame_h: int = 224
     hidden_frame_w: int = 224
+
 
 # Main model class
 class ScenephonyModel(nn.Module):

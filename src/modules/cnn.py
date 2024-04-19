@@ -15,6 +15,7 @@ class CNNFeatureExtractorConfig:
     feature_size: int
     pretrained: bool = True
 
+
 class CNNFeatureExtractor(nn.Module):
     """Model to extract features from a sequence of images using ResNet50 and process through FC layers."""
 
@@ -27,8 +28,8 @@ class CNNFeatureExtractor(nn.Module):
         self.resnet50.fc = nn.Identity()  # Bypass the final FC layer
 
         # Additional layers to process the features
-        self.fc1 = nn.Linear(num_features, config.feature_size * 2)
-        self.fc2 = nn.Linear(config.feature_size * 2, config.feature_size)
+        self.fc1 = nn.Linear(num_features, config.feature_size)
+        self.fc2 = nn.Linear(config.feature_size, config.feature_size)
         self.relu = nn.ReLU()
 
     def forward(self, x: Tensor) -> Tensor:

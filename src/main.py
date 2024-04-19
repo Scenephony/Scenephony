@@ -5,9 +5,8 @@ from math import ceil
 from torchvision.io import read_video
 from tqdm import tqdm
 from typing import Optional
-
 from model import ScenephonyModel, ScenephonyModelConfig
-from utils import chord_to_number
+from utils import chord_to_number, pad_chords
 
 
 def preproc_vid(video: torch.Tensor, sample_frames: int, new_H: int, new_W: int) -> torch.Tensor:
@@ -75,7 +74,7 @@ def train(
             os.path.join(video_dir, fn),
             start_pts=10, end_pts=20, pts_unit="sec", 
             output_format="TCHW"
-        )[0].to(device)
+        )[0].to(device).float()
 
         video = preproc_vid(
             video, config.sample_frames, config.hidden_frame_h, config.hidden_frame_w
@@ -83,11 +82,13 @@ def train(
         videos.append(video)
     videos = torch.stack(videos)
 
-    for fn in os.listdir(video_dir):
+    for fn in os.listdir(chord_dir):
         f = open(os.path.join(chord_dir, fn), "r")
-        chord_seq = [chord_to_number(line.strip()[-1]) for line in f.readlines()]
+        chord_seq = [chord_to_number(line.strip().split()[-1]) for line in f.readlines()]
         chords.append(torch.Tensor(chord_seq))
-    chords = torch.stack(chords)
+    f.close()
+    chords = [torch.Tensor(chord_seq).to(device) for chord_seq in chords]
+    chords = pad_chords(chords)
 
     print(f"Loaded videos of shape {videos.shape} and chords of shape {chords.shape}.")
 
@@ -138,21 +139,20 @@ def test(
     model.to(device)
 
     # Load data, inference and save chord files
-    for vid_fn in tqdm(os.listdir(os.path.join(data_dir, "video"))):
-        vid_path = os.path.join(data_dir, vid_fn)
+    for vid_fn in tqdm(os.listdir(os.path.join(data_dir, "videos"))):
+        vid_path = os.path.join(data_dir, "videos", vid_fn)
         video = read_video(
             vid_path, 
             start_pts=10, end_pts=20, pts_unit="sec", 
             output_format="TCHW"
-        )[0].to(device)    # shape: (T, C, H, W)
+        )[0].to(device).float()    # shape: (T, C, H, W)
         video = preproc_vid(
             video, config.sample_frames, config.hidden_frame_h, config.hidden_frame_w
         )
-        print(video.shape)
-
+        print(video, "\n")
         # Infer chord sequence and write to txt file
         chord = model(video.unsqueeze(0))   # inp_shape: (1, T, C, H, W), out_shape: (1, K)
-        chord_path = os.path.join(output_dir, vid_fn.replace('.mp4', '.wav'))
+        chord_path = os.path.join(output_dir, vid_fn.replace('.mp4', '.txt'))
         chord = chord.squeeze().cpu()
         with open(chord_path, "w") as f:
             f.write("\n".join([str(int(c)) for c in chord]))

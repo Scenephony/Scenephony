@@ -35,7 +35,6 @@ class ImgSeqLSTM(nn.Module):
         self.fc2 = nn.Linear(config.output_size * 2, config.output_size)
         self.relu = nn.ReLU()
 
-
     def forward(self, x: Tensor) -> Tensor:
         """Converts a sequence of image features to audio embeddings.
         
