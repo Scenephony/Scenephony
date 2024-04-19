@@ -1,7 +1,7 @@
 import torch
 from torch import nn, Tensor
 from dataclasses import dataclass
-
+from modules.cnn import CNNFeatureExtractor, CNNFeatureExtractorConfig
 
 @dataclass
 class ScenephonyModelConfig:
@@ -22,8 +22,11 @@ class ScenephonyModel(nn.Module):
     def __init__(self, config: ScenephonyModelConfig) -> None:
         super(ScenephonyModel, self).__init__()
         self.config = config
+	self.feature_extractor = CNNFeatureExtractor(CNNFeatureExtractorConfig(
+            pretrained=True,
+            num_classes=self.config.num_output_classes
+        ))
 
-    
     def forward(self, x: Tensor) -> Tensor:
         """Transforms input video frames to audio notes.
         
