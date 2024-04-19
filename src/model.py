@@ -1,14 +1,35 @@
 import torch
 from torch import nn, Tensor
+from dataclasses import dataclass
+
+
+@dataclass
+class ScenephonyModelConfig:
+    """Dataclass to hold the configuration of the Scenephony model.
+    
+    Attributes:
+        hidden_frame_h: Height of the hidden frame.
+        hidden_frame_w: Width of the hidden frame.
+    """
+    sample_frames = 15
+    hidden_frame_h = 224
+    hidden_frame_w = 224
 
 
 class ScenephonyModel(nn.Module):
     """The main Scenephony model."""
 
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-        self.audio_sample_rate = 44100
+    def __init__(self, config: ScenephonyModelConfig) -> None:
+        super(ScenephonyModel, self).__init__()
+        self.config = config
 
     
     def forward(self, x: Tensor) -> Tensor:
+        """Transforms input video frames to audio notes.
+        
+        Args:
+            x: Input video frames of shape (N, T, C, H, W).
+               Where N is the batch size, T is the number of frames, C is the number of channels, 
+               H is the height and W is the width.
+        """
         pass
