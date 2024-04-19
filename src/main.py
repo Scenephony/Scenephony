@@ -57,7 +57,7 @@ def train(
     set_seed(seed)
     os.makedirs(output_dir, exist_ok=True)
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    video_dir, chord_dir = os.path.join(data_dir, "video"), os.path.join(data_dir, "chord")
+    video_dir, chord_dir = os.path.join(data_dir, "videos"), os.path.join(data_dir, "chord")
 
     # Setup model, optimizer and loss function
     config = ScenephonyModelConfig()
@@ -72,7 +72,7 @@ def train(
     videos, chords = [], []   # videos.shape: (N, T, C, H, W), chords.shape: (N, K)
     for fn in os.listdir(video_dir):
         video = read_video(
-            os.path.join(data_dir, fn), 
+            os.path.join(video_dir, fn),
             start_pts=10, end_pts=20, pts_unit="sec", 
             output_format="TCHW"
         )[0].to(device)
@@ -83,8 +83,8 @@ def train(
         videos.append(video)
     videos = torch.stack(videos)
 
-    for fn in os.listdir(chord_dir):
-        f = open(os.path.join(data_dir, fn), "r")
+    for fn in os.listdir(video_dir):
+        f = open(os.path.join(chord_dir, fn), "r")
         chord_seq = [chord_to_number(line.strip()[-1]) for line in f.readlines()]
         chords.append(torch.Tensor(chord_seq))
     chords = torch.stack(chords)

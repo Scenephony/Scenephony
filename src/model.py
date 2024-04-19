@@ -1,8 +1,6 @@
 import torch
 from modules.cnn import CNNFeatureExtractor, CNNFeatureExtractorConfig
-from img_seq_lstm import ImgSeqLSTM, ImgSeqLSTMConfig
-from torch import nn, Tensor
-from dataclasses import torch
+from modules.img_seq_lstm import ImgSeqLSTM, ImgSeqLSTMConfig
 from torch import nn, Tensor
 from dataclasses import dataclass
 
@@ -10,7 +8,7 @@ from dataclasses import dataclass
 @dataclass
 class ScenephonyModelConfig:
     """Dataclass to hold the configuration of the Scenephony model.
-    
+
     Attributes:
         sample_frames: Number of frames sampled from the video.
         hidden_frame_h: Height of the frame.
@@ -21,14 +19,14 @@ class ScenephonyModelConfig:
         lstm_num_layers: Number of layers in LSTM.
         lstm_output_size: Number of output features from LSTM.
     """
+    cnn_feature_size: int = 128
+    lstm_input_size: int = 128
+    lstm_hidden_size: int = 64
+    lstm_num_layers: int = 2
+    lstm_output_size: int = 10
     sample_frames: int = 15
     hidden_frame_h: int = 224
     hidden_frame_w: int = 224
-    cnn_num_classes: int
-    lstm_input_size: int
-    lstm_hidden_size: int
-    lstm_num_layers: int
-    lstm_output_size: int
 
 # Main model class
 class ScenephonyModel(nn.Module):
@@ -38,7 +36,7 @@ class ScenephonyModel(nn.Module):
         super(ScenephonyModel, self).__init__()
         self.config = config
         # Initialize CNN Feature Extractor
-        self.cnn = CNNFeatureExtractor(CNNFeatureExtractorConfig(pretrained=True, num_classes=config.cnn_num_classes))
+        self.cnn = CNNFeatureExtractor(CNNFeatureExtractorConfig(pretrained=True, feature_size=config.cnn_feature_size))
         # Initialize LSTM
         self.lstm = ImgSeqLSTM(ImgSeqLSTMConfig(
             input_size=config.lstm_input_size,
