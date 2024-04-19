@@ -37,17 +37,13 @@ class CNNFeatureExtractor(nn.Module):
             x: Input tensor of shape (batch_size, seq_len, 3, H, W)
         
         Returns:
-            Output tensor of shape (batch_size, num_classes).
+            Output tensor of shape (batch_size, seq_len, num_classes).
         """
         batch_size, seq_len, c, h, w = x.shape
-        x = x.view(-1, c, h, w)
+        x = x.view(-1, c, h, w)  # Flatten the batch and sequence dimensions for feature extraction
         features = self.resnet50(x)
 
-        features = features.view(batch_size, seq_len, -1)
-        features = features.mean(dim=1)
-
-        # Fully connected layers to refine the features
-        features = self.fc1(features)
+        features = features.view(batch_size, seq_len, -1)  # Reshape back to include sequence length
+        features = self.fc1(features)  # Apply the first FC layer across each sequence element
         features = self.relu(features)
-        output = self.fc2(features)
-        return output
+        return features
