@@ -1,5 +1,5 @@
 import torch
-from cnn import CNNFeatureExtractor, CNNFeatureExtractorConfig
+from modules.cnn import CNNFeatureExtractor, CNNFeatureExtractorConfig
 from img_seq_lstm import ImgSeqLSTM, ImgSeqLSTMConfig
 from torch import nn, Tensor
 from dataclasses import torch
