@@ -11,6 +11,8 @@ def chord_to_number(ch_str: str) -> float:
     # Preprocess chord string
     ch_str = ch_str.replace("o", "dim")
     ch_str = ch_str.replace("+", "aug")
+    if ch_str.endswith("M"):
+        ch_str = ch_str[:-1]
 
     chord = Chord(ch_str)
     midi_num = 0
